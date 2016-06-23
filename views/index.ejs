@@ -1,0 +1,134 @@
+<html>
+<head>
+<title>ChatterBox</title>
+<style type="text/css">
+
+    * {
+        margin: 0;
+        padding: 0;
+    }
+    
+    #content {
+        margin: 20px;
+    }
+    
+    #output {
+        width: 500px;
+        height: 400px;
+        margin-bottom: 10px;
+        padding: 5px;
+        border: 1px solid black;
+        overflow: scroll;
+        word-wrap: break-word; 
+    }
+    
+    #input {
+        width: 500px;
+        display: block;
+        margin-bottom: 10px;
+        white-space: pre-wrap;
+    }
+
+    .time{
+        color: lightgrey;
+        font-size: 10px;
+        margin-top: 0px;
+        margin-bottom: 0px;
+    }
+    
+</style>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+    <script type ="text/javascript" src="/socket.io/socket.io.js"></script>
+    <script type ="text/javascript">
+        
+        var socket = io.connect();
+        var username = '';
+
+        function formatDate(date) {
+            var hours = date.getHours();
+            var minutes = date.getMinutes();
+            var ampm = hours >= 12 ? 'pm' : 'am';
+            hours = hours % 12;
+            hours = hours ? hours : 12;
+            minutes = minutes < 10 ? '0'+minutes : minutes;
+            var strTime = hours + ':' + minutes + ' ' + ampm;
+            return date.getMonth()+1 + "/" + date.getDate() + "/" + date.getFullYear() + "  " + strTime;
+        }
+
+        $(document).on("click", '#submit', function (){
+            var d = new Date();
+            var date = formatDate(d);
+            socket.emit("send_new_message", { 
+                text : "<p class='time'>" + date + "</p><p>" + username + ': ' + $('#input').val() + "</p>"
+            });
+            $('#input').val('')
+        });
+        
+        $(document).on("keypress", '#input', function (e) {
+            var key = e.which;
+            if (key == 13) {
+                e.preventDefault();
+                if ($('#input').val().length != 0) {
+                    $('#submit').click();
+                }
+            }
+        });   
+
+        $(document).ready(function (){    
+
+            $('#name').keypress(function (e) {
+                if (e.which == 13) {
+                   $('form#login').submit(function(){
+                        socket.emit("got_new_user", {
+                            name: $('#name').val(),
+                            id: socket.io.engine.id
+                        });
+                        return false;   
+                    });
+                }
+            });
+
+            socket.on('new_user', function(data){
+                    $('#output').append('<p>' + data.name + ' has entered the room.</p>');
+            });
+            
+            socket.on('route_to_chatroom', function(data){
+                username = data.name;
+                $('#content').html("<div id='output'></div>");
+                $('#content').append("<textarea rows=3 id='input'></textarea>");
+                $('#content').append("<button id='submit'>Submit</button>");
+                socket.emit("get_current_messages");
+                $('#input').focus();
+                $('#input').select();
+            });
+            
+            socket.on('current', function(data){
+                for (idx in data.messages){
+                    $('#output').append('<p>' 
+                        + data.messages[idx] + '</p>');
+                }
+                $('#output').scrollTop(1E10);
+            });
+            
+            socket.on('add_message', function (data){
+                $('#output').append(data.text);
+                $('#output').scrollTop(1E10);
+            });
+            
+            socket.on('user_disconnecting', function(data){
+                    $('#output').append('<p>' 
+                        + data.name + ' has disconnected</p>');            
+            })
+            
+        });
+    </script>
+</head>
+<body>    
+    <div id="content">
+        <form id='login'>
+        <strong>Enter</strong> your name: <input type='text' id="name">
+        </form>
+    </div>
+</body>
+</html>
